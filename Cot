@@ -1,0 +1,175 @@
+import 'package:flutter/material.dart';
+import 'package:pdf/widgets.dart' as pw;
+import 'package:path_provider/path_provider.dart';
+import 'dart:io';
+import 'package:share_plus/share_plus.dart';
+
+void main() {
+  runApp(const MyApp());
+}
+
+class MyApp extends StatelessWidget {
+  const MyApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const MaterialApp(
+      debugShowCheckedModeBanner: false,
+      home: InputScreen(),
+    );
+  }
+}
+
+class InputScreen extends StatefulWidget {
+  const InputScreen({super.key});
+
+  @override
+  _InputScreenState createState() => _InputScreenState();
+}
+
+class _InputScreenState extends State<InputScreen> {
+  final TextEditingController _nameController = TextEditingController();
+  final TextEditingController _ageController = TextEditingController();
+  bool _isCheckActive = false;
+  final List<Map<String, dynamic>> _people = [];
+
+  // Función para calcular el precio según edad y estado del checkbox
+  int _calculatePrice(int age, bool isChecked) {
+    if (isChecked) {
+      if (age >= 0 && age <= 4) return 20;
+      if (age >= 5 && age <= 9) return 30;
+      if (age >= 10 && age <= 14) return 40;
+      if (age >= 15 && age <= 19) return 50;
+      if (age >= 20 && age <= 24) return 60;
+    } else {
+      if (age >= 0 && age <= 4) return 10;
+      if (age >= 5 && age <= 9) return 20;
+      if (age >= 10 && age <= 14) return 30;
+      if (age >= 15 && age <= 19) return 40;
+      if (age >= 20 && age <= 24) return 50;
+    }
+    return 0;
+  }
+
+  // Función para generar el PDF con formato
+  Future<File> _generatePdf() async {
+    final pdf = pw.Document();
+
+    pdf.addPage(
+      pw.Page(
+        build: (pw.Context context) {
+          return pw.Column(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text('Listado de Personas',
+                  style: pw.TextStyle(
+                    fontSize: 24,
+                    fontWeight: pw.FontWeight.bold,
+                  )),
+              pw.SizedBox(height: 20),
+              pw.Text('Este es un resumen de las personas y sus precios.',
+                  style: pw.TextStyle(fontSize: 14)),
+              pw.SizedBox(height: 20),
+              // Reemplazamos ListView.builder por un simple bucle
+              for (var i = 0; i < _people.length; i++)
+                pw.Text(
+                    '${i + 1}. Nombre: ${_people[i]['name']}, Edad: ${_people[i]['age']}, Precio: ${_people[i]['price']}',
+                    style: pw.TextStyle(fontSize: 12)),
+            ],
+          );
+        },
+      ),
+    );
+
+    final directory = await getApplicationDocumentsDirectory();
+    final file = File('${directory.path}/personas.pdf');
+    await file.writeAsBytes(await pdf.save());
+    return file;
+  }
+
+  // Función para compartir el PDF
+  Future<void> _sharePdf() async {
+    final file = await _generatePdf();
+    await Share.shareFiles([file.path], text: 'Aquí tienes el PDF generado');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Gestión de Personas'),
+      ),
+      body: Padding(
+        padding: const EdgeInsets.all(16.0),
+        child: Column(
+          children: [
+            TextField(
+              controller: _nameController,
+              decoration: const InputDecoration(labelText: 'Nombre'),
+            ),
+            TextField(
+              controller: _ageController,
+              decoration: const InputDecoration(labelText: 'Edad'),
+              keyboardType: TextInputType.number,
+            ),
+            Row(
+              children: [
+                Checkbox(
+                  value: _isCheckActive,
+                  onChanged: (value) {
+                    setState(() {
+                      _isCheckActive = value!;
+                    });
+                  },
+                ),
+                const Text('Precio especial'),
+              ],
+            ),
+            ElevatedButton(
+              onPressed: () {
+                final name = _nameController.text.trim();
+                final age = int.tryParse(_ageController.text.trim()) ?? -1;
+
+                if (name.isEmpty || age < 0) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                        content: Text('Por favor, ingrese datos válidos')),
+                  );
+                  return;
+                }
+
+                final price = _calculatePrice(age, _isCheckActive);
+
+                setState(() {
+                  _people.add({'name': name, 'age': age, 'price': price});
+                  _nameController.clear();
+                  _ageController.clear();
+                });
+              },
+              child: const Text('Agregar'),
+            ),
+            Expanded(
+              child: ListView.builder(
+                itemCount: _people.length,
+                itemBuilder: (context, index) {
+                  final person = _people[index];
+                  return Card(
+                    child: ListTile(
+                      title: Text(person['name']),
+                      subtitle: Text(
+                          'Edad: ${person['age']} - Precio: ${person['price']}'),
+                    ),
+                  );
+                },
+              ),
+            ),
+            ElevatedButton(
+              onPressed: _sharePdf,
+              child: const Text('Compartir PDF'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
